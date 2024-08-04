@@ -1,8 +1,11 @@
 package com.amazon.ata.dynamodbdeleteiterators.classroom.activity;
 
+import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.InviteDao;
 import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.MemberDao;
+import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.models.Invite;
 
 import javax.inject.Inject;
+import java.util.List;
 
 /**
  * Handles a request to delete a member. Actually deletes the member
@@ -10,14 +13,16 @@ import javax.inject.Inject;
  */
 public class DeleteMemberActivity {
     private MemberDao memberDao;
+    private InviteDao inviteDao;
 
     /**
      * Constructs the activity handler.
      * @param memberDao The MemberDao to use for member item operations
      */
     @Inject
-    public DeleteMemberActivity(MemberDao memberDao) {
+    public DeleteMemberActivity(MemberDao memberDao, InviteDao inviteDao) {
         this.memberDao = memberDao;
+        this.inviteDao = inviteDao;
     }
 
     /**
@@ -33,5 +38,10 @@ public class DeleteMemberActivity {
      * @param memberId The ID of the member to delete
      */
     public void handleRequest(final String memberId) {
+        List<Invite> invites = inviteDao.getInvitesSentToMember(memberId);
+        for (Invite invite : invites) {
+            inviteDao.deleteInvite(invite.getEventId(), memberId);
+        }
+        memberDao.deletePermanently(memberId);
     }
 }

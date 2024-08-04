@@ -1,9 +1,15 @@
 package com.amazon.ata.dynamodbdeleteiterators.classroom.activity;
 
+import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.EventDao;
 import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.InviteDao;
+import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.models.CanceledInvite;
+import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.models.Event;
 import com.amazon.ata.dynamodbdeleteiterators.classroom.dao.models.Invite;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
 import javax.inject.Inject;
 
 /**
@@ -11,14 +17,16 @@ import javax.inject.Inject;
  */
 public class GetInvitesForMemberActivity {
     private InviteDao inviteDao;
+    private EventDao eventDao;
 
     /**
      * Constructs an Activity with the given DAO.
      * @param inviteDao The InviteDao to use to fetch invites
      */
     @Inject
-    public GetInvitesForMemberActivity(InviteDao inviteDao) {
+    public GetInvitesForMemberActivity(InviteDao inviteDao, EventDao eventDao) {
         this.inviteDao = inviteDao;
+        this.eventDao = eventDao;
     }
 
     /**
@@ -35,6 +43,27 @@ public class GetInvitesForMemberActivity {
      * @return List of Invites sent to the member (if any found)
      */
     public List<Invite> handleRequest(final String memberId) {
-        return inviteDao.getInvitesSentToMember(memberId);
+        List<Invite> invites = inviteDao.getInvitesSentToMember(memberId);
+
+        // Store results locally so exception is thrown here
+        // before the other loop that modifies the database data
+        Map<String, Event> eventMap = new HashMap<>();
+        for (Invite invite : invites) {
+            eventMap.put(invite.getEventId(), eventDao.getEvent(invite.getEventId()));
+        }
+
+        ListIterator<Invite> inviteListIterator = invites.listIterator();
+        while (inviteListIterator.hasNext()) {
+            Invite invite = inviteListIterator.next();
+            Event event = eventMap.get(invite.getEventId());
+
+            if (event.isCanceled()) {
+                inviteDao.cancelInvite(event.getId(), invite.getMemberId());
+                inviteListIterator.remove();
+                inviteListIterator.add(new CanceledInvite(invite));
+            }
+        }
+
+        return invites;
     }
 }
